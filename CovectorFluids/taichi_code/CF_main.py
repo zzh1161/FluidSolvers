@@ -12,7 +12,7 @@ ny = 256
 L = 2*ti.math.pi
 h = L/nx
 dt = 0.025
-total_frame = 600
+total_frame = 500
 
 taylorVor = TaylorGreenVortex(res=nx)
 solver_1 = CovectorFluidSolver(nx, ny, h, dt, scheme=Scheme.CF_SL_1ST)
@@ -54,19 +54,19 @@ while cur_frame < total_frame:
     fig, axs = plt.subplots(2, 2, figsize=(8, 8))
     # subplot 1
     im1 = axs[0, 0].imshow(solver_1.abs_vor.to_numpy().transpose(), cmap='jet', vmin=vmin, vmax=vmax)
-    axs[0, 0].set_title('CF_SL_1st')
+    axs[0, 0].set_title('1st order Semi-Lagrangian')
     axs[0, 0].axis('off')
     # subplot 2
     axs[0, 1].imshow(solver_2.abs_vor.to_numpy().transpose(), cmap='jet', vmin=vmin, vmax=vmax)
-    axs[0, 1].set_title('CF_SL_2nd')
+    axs[0, 1].set_title('2nd order Semi-Lagrangian')
     axs[0, 1].axis('off')
     # subplot 3
     axs[1, 0].imshow(solver_b.abs_vor.to_numpy().transpose(), cmap='jet', vmin=vmin, vmax=vmax)
-    axs[1, 0].set_title('CF_BFECC')
+    axs[1, 0].set_title('CF+BFECC')
     axs[1, 0].axis('off')
     # subplot 4
     axs[1, 1].imshow(solver_m.abs_vor.to_numpy().transpose(), cmap='jet', vmin=vmin, vmax=vmax)
-    axs[1, 1].set_title('CF_MCM')
+    axs[1, 1].set_title('CF+MCM')
     axs[1, 1].axis('off')
     # unified colorbar
     cbar = fig.colorbar(im1, ax=axs, orientation='vertical', fraction=0.02, pad=0.04)
