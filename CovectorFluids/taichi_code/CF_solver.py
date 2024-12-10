@@ -10,6 +10,7 @@ class Scheme(Enum):
     CF_SL_2ND = 1
     CF_BFECC = 2
     CF_MCM = 3
+    CF_MCM_2ND = 4
 
 @ti.data_oriented
 class CovectorFluidSolver:
@@ -42,8 +43,10 @@ class CovectorFluidSolver:
         # Forward map and backward map
         self.fwd_map = ti.Vector.field(2, dtype=ti.f32, shape=(nx, ny))
         self.fwd_map_temp = ti.Vector.field(2, dtype=ti.f32, shape=(nx, ny))
+        self.fwd_map_copy = ti.Vector.field(2, dtype=ti.f32, shape=(nx, ny)) # For 2nd order
         self.bwd_map = ti.Vector.field(2, dtype=ti.f32, shape=(nx, ny))
         self.bwd_map_temp = ti.Vector.field(2, dtype=ti.f32, shape=(nx, ny))
+        self.bwd_map_copy = ti.Vector.field(2, dtype=ti.f32, shape=(nx, ny)) # For 2nd order
         # For BiMocq
         self.vx1 = ti.field(dtype=ti.f32, shape=(self.nx + 1, self.ny))
         self.vy1 = ti.field(dtype=ti.f32, shape=(self.nx, self.ny + 1))
@@ -73,6 +76,8 @@ class CovectorFluidSolver:
             raise ValueError('Invalid input shape')
         self.velx.copy_from(vx)
         self.vely.copy_from(vy)
+        self.vx0.copy_from(vx)
+        self.vy0.copy_from(vy)
 
     def init_vorticity(self, vor):
         if self.vor.shape != vor.shape:
@@ -338,6 +343,10 @@ class CovectorFluidSolver:
             if dist > d:
                 d = dist
         return d
+    
+    #####################################################
+    # Advance
+    #####################################################
 
     def advance(self):
         if ti.static(self.scheme == Scheme.CF_SL_1ST):
@@ -389,8 +398,8 @@ class CovectorFluidSolver:
             # Step 1: estimate velocity
             self.velx_temp.copy_from(self.velx)
             self.vely_temp.copy_from(self.vely)
-            # Step 2: advect the inverse flow map
-            self.update_bwdmap(self.dt, self.bwd_map, self.velx, self.vely, self.bwd_map_temp)
+            # Step 2: advect inverse flow map
+            self.update_bwdmap(self.dt, self.bwd_map, self.velx_temp, self.vely_temp, self.bwd_map_temp)
             self.bwd_map.copy_from(self.bwd_map_temp)
             # Step 3: pullback velocity
             self.pullbackVelcoity(self.bwd_map, self.vx0, self.vy0, self.vx1, self.vy1)
@@ -416,5 +425,66 @@ class CovectorFluidSolver:
             maxvel = self.maxVelocity()
             if dist / (maxvel*self.dt) > 0.1:
                 self.reinit_mcm()
+        elif ti.static(self.scheme == Scheme.CF_MCM_2ND):
+            ## First half: estimate flow velocity at midpoint
+            # 1: copy flow maps for reuse
+            self.bwd_map_copy.copy_from(self.bwd_map)
+            self.fwd_map_copy.copy_from(self.fwd_map)
+            # 2: advect inverse flow map
+            self.update_bwdmap(0.5*self.dt, self.bwd_map, self.velx, self.vely, self.bwd_map_temp)
+            self.bwd_map.copy_from(self.bwd_map_temp)
+            # 3: pullback velocity
+            self.pullbackVelcoity(self.bwd_map, self.vx0, self.vy0, self.vx1, self.vy1)
+            # 4: march flow map
+            self.update_fwdmap(0.5*self.dt, self.fwd_map, self.velx, self.vely, self.fwd_map_temp)
+            self.fwd_map.copy_from(self.fwd_map_temp)
+            # 5: back-and-forth transport
+            self.pullbackVelcoity(self.fwd_map, self.vx1, self.vy1, self.vx0_, self.vy0_)
+            # 6: roundtrip error
+            self.field_minus(self.vx0_, self.velx, self.ex)
+            self.field_minus(self.vy0_, self.vely, self.ey)
+            self.field_multiply(0.5, self.ex)
+            self.field_multiply(0.5, self.ey)
+            # 7: error correction
+            self.pullbackVelcoity(self.bwd_map, self.ex, self.ey, self.errx, self.erry)
+            self.field_minus(self.vx1, self.errx, self.velx_temp)
+            self.field_minus(self.vy1, self.erry, self.vely_temp)
+            # 8: pressure projection
+            self.pressure_projection(0.5*self.dt, self.p, self.p_temp, self.velx_temp, self.vely_temp)
+            self.apply_pressure(0.5*self.dt, self.p, self.velx_temp, self.vely_temp)
 
+            ## Second half: update velocity field and flow maps
+            # 1: copy back flow maps
+            self.bwd_map.copy_from(self.bwd_map_copy)
+            self.fwd_map.copy_from(self.fwd_map_copy)
+            # 2: advect inverse flow map
+            self.update_bwdmap(self.dt, self.bwd_map, self.velx_temp, self.vely_temp, self.bwd_map_temp)
+            self.bwd_map.copy_from(self.bwd_map_temp)
+            # 3: pullback velocity
+            self.pullbackVelcoity(self.bwd_map, self.vx0, self.vy0, self.vx1, self.vy1)
+            # 4: march flow map
+            self.update_fwdmap(self.dt, self.fwd_map, self.velx_temp, self.vely_temp, self.fwd_map_temp)
+            self.fwd_map.copy_from(self.fwd_map_temp)
+            # 5: back-and-forth transport
+            self.pullbackVelcoity(self.fwd_map, self.vx1, self.vy1, self.vx0_, self.vy0_)
+            # 6: roundtrip error
+            self.field_minus(self.vx0_, self.velx, self.ex)
+            self.field_minus(self.vy0_, self.vely, self.ey)
+            self.field_multiply(0.5, self.ex)
+            self.field_multiply(0.5, self.ey)
+            # 7: error correction
+            self.pullbackVelcoity(self.bwd_map, self.ex, self.ey, self.errx, self.erry)
+            self.field_minus(self.vx1, self.errx, self.velx)
+            self.field_minus(self.vy1, self.erry, self.vely)
+            # 8: pressure projection
+            self.pressure_projection(self.dt, self.p, self.p_temp, self.velx, self.vely)
+            self.apply_pressure(self.dt, self.p, self.velx, self.vely)
+
+            ## Reinitialization judgement
+            # dist = self.distortion()
+            # maxvel = self.maxVelocity()
+            # if dist / (maxvel*self.dt) > 0.001:
+            #     self.reinit_mcm()
+            self.reinit_mcm()
+            
         self.vel_to_vor()
