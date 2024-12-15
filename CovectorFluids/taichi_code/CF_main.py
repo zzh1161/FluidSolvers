@@ -80,11 +80,11 @@ while cur_frame < total_frame:
 # vmin = 0.0
 # vmax = 10.0
 # while cur_frame < total_frame:
+#     ## Plot in one figure
 #     solver_0.advance()
 #     solver_1.advance()
 #     solver_2.advance()
 #     solver_3.advance()
-
 #     plt.close()
 #     fig, axs = plt.subplots(2, 2, figsize=(8, 8))
 #     # subplot 1
@@ -108,5 +108,27 @@ while cur_frame < total_frame:
 #     # save image
 #     plt.savefig(f'./output/{cur_frame}.png')
 #     cbar.remove()
+
+#     ## Plot in seperate figures
+#     plt.close()
+#     if args.scheme == 0:
+#         plt.imshow(np.rot90(solver_0.abs_vor.to_numpy()), cmap='jet', vmin=vmin, vmax=vmax)
+#         plt.title('Semi-Lagrangian')
+#         solver_0.advance()
+#     elif args.scheme == 1:
+#         plt.imshow(np.rot90(solver_1.abs_vor.to_numpy()), cmap='jet', vmin=vmin, vmax=vmax)
+#         plt.title('2nd order Semi-Lagrangian')
+#         solver_1.advance()
+#     elif args.scheme == 2:
+#         plt.imshow(np.rot90(solver_2.abs_vor.to_numpy()), cmap='jet', vmin=vmin, vmax=vmax)
+#         plt.title('CF+BFECC')
+#         solver_2.advance()
+#     elif args.scheme == 3:
+#         plt.imshow(np.rot90(solver_3.abs_vor.to_numpy()), cmap='jet', vmin=vmin, vmax=vmax)
+#         plt.title('CF+MCM')
+#         solver_3.advance()
+#     plt.axis('off')
+#     plt.colorbar()
+#     plt.savefig(f'./output/{cur_frame}.png')
 
 #     cur_frame += 1
