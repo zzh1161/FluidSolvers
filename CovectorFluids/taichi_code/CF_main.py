@@ -130,5 +130,25 @@ while cur_frame < total_frame:
 #     plt.axis('off')
 #     plt.colorbar()
 #     plt.savefig(f'./output/{cur_frame}.png')
+#     cur_frame += 1
 
+
+# vmin = 0.0
+# vmax = 10.0
+# while cur_frame < total_frame:
+#     ## Plot in one figure
+#     solver_0.advance()
+#     solver_3.advance()
+#     plt.close()
+#     fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+
+#     im1 = axs[0].imshow(np.rot90(solver_0.abs_vor.to_numpy()), cmap='jet', vmin=vmin, vmax=vmax)
+#     axs[0].axis('off')
+#     axs[1].imshow(np.rot90(solver_3.abs_vor.to_numpy()), cmap='jet', vmin=vmin, vmax=vmax)
+#     axs[1].axis('off')
+#     # unified colorbar
+#     cbar = fig.colorbar(im1, ax=axs, orientation='vertical', fraction=0.02, pad=0.04)
+#     # save image
+#     plt.savefig(f'./output/{cur_frame}.png')
+#     cbar.remove()
 #     cur_frame += 1
